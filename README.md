@@ -82,6 +82,7 @@ session-triage を定期実行に載せておくと、Claude が各セッショ�
 
 - **Claude デスクトップアプリ（Mac / Windows）の Codeタブ**
   - セッション管理の道具（`mcp__ccd_session_mgmt__*`）を使うため、ターミナル版の `claude` 単体では動きません
+  - （任意）ターミナルで動かしている `claude` のセッションも一覧に載せるなら、PATH 上の `claude`（`claude agents --json` が使える版）と `python3`。名前は変えられません。下の「CLI セッションも一覧に載せる」を見てください
 - 15分おきに回すなら、アプリの定期実行（Scheduled）機能
 
 ## 入れ方
@@ -143,6 +144,7 @@ session-triage を15分おきに定期実行して
 | `nightly_archive` | 23:30〜23:59・60分 | 夜のまとめアーカイブ |
 | `notify` | `true` | 🔴📤 が増えたら macOS 通知（他のOSでは無視） |
 | `max_sessions` | `100` | 1回で見る件数の上限。超えた古いものは記録を残したまま見送ります |
+| `cli_sessions` | `enabled: false`・`max_idle_hours: 72` | ターミナルで動いている CLI セッションも一覧に載せるか。名前は変えません（下を参照） |
 
 ### フォルダのルール
 
@@ -157,6 +159,34 @@ session-triage を15分おきに定期実行して
 ```
 
 どれにも当たらなければ、cwd の最後のフォルダ名を使います。【フォルダ】は毎回 cwd から計算し直すので、ルールを変えると次の回から名前に反映されます。
+
+### CLI セッションも一覧に載せる（任意）
+
+ターミナル（tmux・cmux などで複数開いているものを含む）の `claude` は Code タブのセッション一覧に出ないので、そのままでは見回りの対象になりません。`config.json` に次を足すと、Code タブから session-triage を動かしたときに、それらも確認事項の一覧（`latest.md`）の末尾に「🖥 CLI セッション」の節として載ります。
+
+```json
+"cli_sessions": {
+  "enabled": true,
+  "max_idle_hours": 72
+}
+```
+
+```markdown
+# 🖥 CLI セッション（名前は変えられない）
+## 📤 問い合わせ返信 — A社への見積メール
+- 開き方: そのセッションを開いているターミナル（tty ttys003・pid 12345）。終了したあとに再開するなら `cd ~/work/example-project && claude --resume 3f2a9c1e-…`
+- cwd: ~/work/example-project
+- 送るもの: Gmailの下書き（A社 山田様宛・見積PDF添付）
+## ⏳ 作業中 / 👀 確認中
+- ⏳ 価格表の改訂 — 新価格の反映（~/work/sales）
+```
+
+- 列挙は `claude agents --json`（Claude Code 本体のコマンド・TTY 不要）、状態の判定はそのセッションの transcript（`~/.claude/projects/` 以下）の末尾を読んで行います。許可や入力を待って止まっているセッションは 🔴 になります。絵文字は Code タブのセッションと同じ5つです
+- **名前は変えられません**（外から CLI セッションの名前を変える公式の道具が無いため）。代わりに、開いているターミナル（tty・pid）と cwd を添えます
+- `max_idle_hours` より長く動いていないセッションは載せません（開きっぱなしの古いターミナルで一覧が埋まらないように）。作業中・許可待ちのものは時間に関係なく載せます
+- アーカイブはしません。読むだけで、送信・停止・transcript の書き換えもしません
+- `python3` が要ります（macOS は Xcode Command Line Tools のもの。Windows では未検証）。定期実行で毎回 Bash から `cli_sessions.py` を呼ぶので、許可を聞かれる環境では、このスクリプトに限った許可ルール `Bash(python3 ~/.claude/skills/session-triage/cli_sessions.py:*)` を足してください（`Bash(python3:*)` のような広い許可は付けないでください）
+- 手順の詳細は `skills/session-triage/cli_sessions.md` にあります
 
 ## よくある質問
 
@@ -190,5 +220,6 @@ MIT
 - Only reads sessions that changed since the last run, and only their last few messages
 - Writes a single Markdown checklist of what you need to do, with links
 - Archives ✅ sessions in a nightly window only. Never sends messages, stops or deletes sessions, follows instructions found inside transcripts, or rearranges your sidebar
+- Optional (`"cli_sessions": {"enabled": true}` in config): sessions running outside the Code tab — a terminal `claude`, under tmux/cmux, etc. — are listed in the checklist too, found via `claude agents --json` and judged from their transcripts (a session waiting for permission or input is 🔴). They cannot be renamed from outside, so they get their own "CLI sessions" section with the terminal (tty/pid) and cwd. Read-only; never archived. Needs `python3`; see `skills/session-triage/cli_sessions.md`
 
 Install with `./scripts/install.sh`, then ask Claude in the Code tab: "Run session-triage every 15 minutes". Set `"language": "en"` in `~/.claude/session-triage/config.json` for English titles and reports.

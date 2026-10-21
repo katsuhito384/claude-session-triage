@@ -34,5 +34,10 @@
     "min_idle_minutes": 60
   },
 
-  "notify": true
+  "notify": true,
+
+  "cli_sessions": {
+    "enabled": false,
+    "max_idle_hours": 72
+  }
 }

@@ -1,6 +1,6 @@
 ---
 name: session-triage
-description: Claudeデスクトップアプリ（Codeタブ）の全セッションを見回り、名前の先頭の絵文字で「⏳作業中／👀確認中／📤送信待ち／🔴要確認／✅完了」を表し、「絵文字【フォルダ】内容」の形に付け直すスキル。自分の判断が要るものだけを一覧にまとめ、完了したものは夜にまとめてアーカイブする。「セッションを整理して」「どのセッションが自分待ち？」「セッションに絵文字を付けて」「session triage」等で使う。定期実行（15分おき）に載せると、サイドバーを見るだけで状況が分かる状態を保てる。
+description: Claudeデスクトップアプリ（Codeタブ）の全セッションを見回り、名前の先頭の絵文字で「⏳作業中／👀確認中／📤送信待ち／🔴要確認／✅完了」を表し、「絵文字【フォルダ】内容」の形に付け直すスキル。自分の判断が要るものだけを一覧にまとめ、完了したものは夜にまとめてアーカイブする。「セッションを整理して」「どのセッションが自分待ち？」「セッションに絵文字を付けて」「session triage」等で使う。定期実行（15分おき）に載せると、サイドバーを見るだけで状況が分かる状態を保てる。設定で有効にすれば、ターミナルで動いている `claude`（CLI）のセッションも一覧に載る（名前は変えない）。
 ---
 
 # session-triage — セッションの見回り係
@@ -35,11 +35,13 @@ Claudeデスクトップアプリ（Codeタブ）のセッションを1つずつ
 | `timezone` | 時刻の判定に使うタイムゾーン |
 | `notify` | 要確認・送信待ちが増えたときに macOS 通知を出すか |
 | `max_sessions` | 1回で見るセッションの上限 |
+| `cli_sessions` | Code タブの外（ターミナルの `claude`）で動いているセッションも一覧に載せるか（`enabled`、既定 false）と、何時間動いていなければ見送るか（`max_idle_hours`、既定 72）。名前は変えない。手順は `cli_sessions.md` |
 
 ## 使うツール
 
 - `mcp__ccd_session_mgmt__list_sessions` / `get_session` / `list_events` / `set_session_title` / `archive_session`
 - これらが見つからないときは ToolSearch で `select:` 指定して読み込む。それでも無ければ「Claudeデスクトップアプリの Codeタブ以外では動かない」と伝えて止まる。
+- `cli_sessions.enabled` が true のときだけ、同じフォルダの `cli_sessions.md` を読み、その手順で Bash から `cli_sessions.py` を使う（読むだけ）。
 
 ## 状態と絵文字
 
@@ -92,13 +94,18 @@ Claudeデスクトップアプリ（Codeタブ）のセッションを1つずつ
    # ⏳ 作業中 / 👀 確認中
    - <タイトル>
    ```
-8. `<data_dir>/state.json` を `{sessionId: {lastActivityAt, isRunning, status, title, folder, asks}}` で書き直す。消すのは、この回でアーカイブしたものと、`list_sessions` で既にアーカイブ済みと分かったものだけ。取得件数が `max_sessions` に達して一覧に出なかったものは前回の記録を残し、確認事項の一覧の先頭に「上限◯件に達したので古いセッションは見ていない」と1行書く。
+   `cli_sessions.enabled` が true なら、この末尾に「🖥 CLI セッション」の節を足す（`cli_sessions.md`）。
+8. `<data_dir>/state.json` を `{sessionId: {lastActivityAt, isRunning, status, title, folder, asks}}` で書き直す。消すのは、この回でアーカイブしたものと、`list_sessions` で既にアーカイブ済みと分かったものだけ。取得件数が `max_sessions` に達して一覧に出なかったものは前回の記録を残し、確認事項の一覧の先頭に「上限◯件に達したので古いセッションは見ていない」と1行書く。`cli_sessions.enabled` が false なら `kind: "cli"` の記録を消す（元から無ければ何もしない）。true のときの CLI の記録は `cli_sessions.md` のとおり。
 9. `<data_dir>/log.md` に `## YYYY-MM-DD HH:MM` の見出しで、変えたものだけ1行ずつ追記する（改名・アーカイブ）。変更が無ければ「変更なし」の1行。
 10. `notify` が true で、前回の state に無かった要確認・送信待ちが新しく出たときだけ、macOS なら通知を1回出す（macOS 以外では何もしない）。
     - タイトルはコードに埋め込まず、引数で渡す。埋め込む前に改行を空白に、`'` を `’` に置き換える。
     ```bash
     osascript -e 'on run argv' -e 'display notification ("要確認・送信待ちが増えました: " & item 1 of argv) with title "session-triage"' -e 'end run' '<置き換え済みのタイトル>'
     ```
+
+## CLI セッションも一覧に載せる（任意）
+
+`cli_sessions.enabled` が true のときだけ、手順5のあと・手順6の前に、同じフォルダの `cli_sessions.md` の手順を行う。ターミナルで動いている `claude` のセッションを `claude agents --json` で列挙し、transcript の末尾から状態を決めて、一覧の末尾に「🖥 CLI セッション」の節を足す。名前は変えない・アーカイブしない・読むだけ。false なら何もしない。
 
 ## 絶対にしないこと
 
@@ -107,8 +114,10 @@ Claudeデスクトップアプリ（Codeタブ）のセッションを1つずつ
 - 自分自身のアーカイブ
 - 要確認・送信待ち・確認中のもののアーカイブ（迷ったら要確認）
 - サイドバーのグループ分け・並べ方・ピン留めの変更（`mcp__ccd_sidebar__*` は使わない）。名前の先頭の絵文字だけで状態を表す
+- CLI セッション（`cli_sessions.md`）も同じ。名前の変更・メッセージ送信・プロセスの停止・`~/.claude/sessions/` や transcript への書き込みはしない。`claude agents --json` と transcript を読むだけ
 
 ## 最後の出力
 
 3行以内で:
 `⏳作業中◯件／👀確認中◯件／📤送信待ち◯件／🔴要確認◯件／✅完了◯件、今回アーカイブ◯件、改名◯件`
+`cli_sessions.enabled` が true なら末尾に `／CLI◯件（🔴◯・📤◯）` を足す（⏳〜✅ の件数は Code タブのセッションだけ）。
